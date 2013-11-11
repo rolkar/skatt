@@ -55,61 +55,57 @@ grundavdrag(Inkomst) ->
     PBB = prisbasbelopp(),
     G =
         if
-            Inkomst < 0.99*PBB ->
-                0.423 * PBB;
-            Inkomst < 2.72*PBB ->
-                0.225 * PBB + 0.2 * Inkomst;
-            Inkomst < 7.88 * PBB ->
-                1.081 * PBB - 0.1 * Inkomst;
-            true ->
-                0.293 * PBB
+            Inkomst < 0.99*PBB -> 0.423*PBB;
+            Inkomst < 2.72*PBB -> 0.225*PBB + 0.2*Inkomst;
+            Inkomst < 3.11*PBB -> 0.770*PBB;
+            Inkomst < 7.88*PBB -> 1.081*PBB - 0.1*Inkomst;
+            true               -> 0.293*PBB
         end,
     roundup(G).
 
 pensionsavgift(_Inkomst, Kommunal) when Kommunal == 0 ->
     0;
 pensionsavgift(Inkomst, _Kommunal) ->
-    100*round((0.07*Inkomst)/100).
+    IBB = inkomstbasbelopp(),
+    P = 
+        if
+            Inkomst < 0.423*IBB -> 0;
+            Inkomst < 8.070*IBB -> 0.07*Inkomst;
+            true                -> 0.07*8.07*IBB
+        end,
+    100*round(P/100).
 
 pensionsavdrag(Pensionsavgift, Kommunal) ->
     erlang:min(Pensionsavgift, Kommunal).
 
 jobbavdrag(Inkomst, Grundavdrag, Pensionsavdrag) ->
+    PBB = prisbasbelopp(),
     J =
         if
-            Inkomst =< Grundavdrag ->
-                0;
-            Inkomst =< 40040 ->
-                kommunal(Inkomst - Grundavdrag);
-            Inkomst =< 119680 ->
-                kommunal(40040 + (Inkomst-40040)*0.304 - Grundavdrag);
-            Inkomst =< 308000 ->
-                kommunal(64284 + (Inkomst-119680)*0.095 - Grundavdrag);
-            true ->
-                kommunal(82192 - Grundavdrag)
+            Inkomst =< Grundavdrag -> 0;
+            Inkomst =< 0.91*PBB    -> kommunal(Inkomst - Grundavdrag);
+            Inkomst =< 2.72*PBB    -> kommunal(0.910*PBB + (Inkomst-0.91*PBB)*0.304 - Grundavdrag);
+            Inkomst =< 7.00*PBB    -> kommunal(1.461*PBB + (Inkomst-2.72)*0.095     - Grundavdrag);
+            true                   -> kommunal(1.868*PBB                            - Grundavdrag)
         end,
 
     K = kommunal(erlang:max(Inkomst - Grundavdrag, 0)) - Pensionsavdrag,
     erlang:min(K, J).
 
 kommunal(NetInkomst) ->
-    kommun(NetInkomst) + lan(NetInkomst).
-
-kommun(NetInkomst) ->
     kommunalskattesats() * NetInkomst.
-
-lan(NetInkomst) ->
-    lansskattesats() * NetInkomst.
 
 %% 20% statlig skatt plus 5% extra varnskatt vid tva brytpunkter
 statlig(NetInkomst) ->
-    BP1 = 401100,
-    BP2 = 574300,
+    BP1 = brytpunkt1(),
+    BP2 = brytpunkt2(),
     [I1, I2, I3] = split(NetInkomst, [BP1, BP2-BP1]),
     I1 * 0.0 + I2 * 0.2 + I3 * 0.25.
 
+%% 2012
 arbetsgivaravgift(Inkomst) ->
-    Inkomst * 0.3142.
+    Inkomst * arbetsgivarskattesats().
+
 
 %% help ----------------------------------------------------------
 
@@ -152,7 +148,7 @@ ceiling(X) ->
     end.
 
 
-%% settings ------------------------------------------------------
+%% Yearly settings -----------------------------------------------
 
 %% 2012
 prisbasbelopp() ->
@@ -161,8 +157,28 @@ prisbasbelopp() ->
 %% prisbasbelopp() ->
 %%     44500.
 
-kommunalskattesats() ->
-    0.24.
+%% 2012
+inkomstbasbelopp() ->
+    54500.
+%% 2013
+%% inkomstbasbelopp() ->
+%%     56500.
 
-lansskattesats() ->
-    0.07.
+%% 2012
+brytpunkt1() ->
+    401100.
+
+%% 2012
+brytpunkt2() ->
+    574300.
+
+%% 2012
+arbetsgivarskattesats() ->
+    0.3142.
+
+
+%% Your settings -------------------------------------------------
+
+%% Din kommun (kommun + lan)
+kommunalskattesats() ->
+    0.316. %% genomsnitt 2012
